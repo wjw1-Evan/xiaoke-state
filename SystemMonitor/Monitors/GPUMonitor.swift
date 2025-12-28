@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 import IOKit
 
 class GPUMonitor: BaseMonitor, MonitorProtocol {
@@ -227,11 +227,14 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
 
     /// 使用 IORegistry 读取 GPU 使用率（优先），读取 IOAccelerator* 的 PerformanceStatistics
     private func getGPUUsageFromIORegistry() -> Double? {
-        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator"]
+        let classes = [
+            "IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator",
+        ]
 
         for cls in classes {
             var iterator: io_iterator_t = 0
-            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            let result = IOServiceGetMatchingServices(
+                kIOMainPortDefault, IOServiceMatching(cls), &iterator)
             guard result == KERN_SUCCESS else { continue }
 
             defer { IOObjectRelease(iterator) }
@@ -239,7 +242,10 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
             var service = IOIteratorNext(iterator)
             while service != 0 {
                 defer { IOObjectRelease(service) }
-                if let dict = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? [String: Any] {
+                if let dict = IORegistryEntryCreateCFProperty(
+                    service, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0)?
+                    .takeRetainedValue() as? [String: Any]
+                {
                     // 常见键名："Device Utilization %"、"GPU Busy"（0~1）
                     if let percent = dict["Device Utilization %"] as? Double {
                         return max(0.0, min(100.0, percent))
@@ -322,7 +328,10 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
         process.standardError = Pipe()
 
         defer {
-            if process.isRunning { process.terminate(); process.waitUntilExit() }
+            if process.isRunning {
+                process.terminate()
+                process.waitUntilExit()
+            }
         }
 
         do {
@@ -338,8 +347,9 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
 
             if let plist = try PropertyListSerialization.propertyList(
                 from: data, options: [], format: nil) as? [[String: Any]],
-               let displays = plist.first?["_items"] as? [[String: Any]],
-               let firstDisplay = displays.first {
+                let displays = plist.first?["_items"] as? [[String: Any]],
+                let firstDisplay = displays.first
+            {
                 if let model = firstDisplay["sppci_model"] as? String {
                     return model
                 }
@@ -357,10 +367,14 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
     // MARK: - IORegistry helpers
 
     private func getGPUNameFromIORegistry() -> String? {
-        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator", "IOPCIDevice"]
+        let classes = [
+            "IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator",
+            "IOPCIDevice",
+        ]
         for cls in classes {
             var iterator: io_iterator_t = 0
-            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            let result = IOServiceGetMatchingServices(
+                kIOMainPortDefault, IOServiceMatching(cls), &iterator)
             guard result == KERN_SUCCESS else { continue }
             defer { IOObjectRelease(iterator) }
 
@@ -368,15 +382,22 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
             while service != 0 {
                 defer { IOObjectRelease(service) }
                 // 尝试读取 model 属性（可能为 CFData 或 CFString）
-                if let cfString = IORegistryEntryCreateCFProperty(service, "model" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() {
+                if let cfString = IORegistryEntryCreateCFProperty(
+                    service, "model" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+                {
                     if CFGetTypeID(cfString) == CFStringGetTypeID() {
                         return cfString as? String
-                    } else if CFGetTypeID(cfString) == CFDataGetTypeID(), let data = cfString as? Data, let str = String(data: data, encoding: .utf8) {
+                    } else if CFGetTypeID(cfString) == CFDataGetTypeID(),
+                        let data = cfString as? Data, let str = String(data: data, encoding: .utf8)
+                    {
                         return str
                     }
                 }
                 // 备用：IOName 或 Vendor/Device strings
-                if let name = IORegistryEntryCreateCFProperty(service, "IOName" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String {
+                if let name = IORegistryEntryCreateCFProperty(
+                    service, "IOName" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+                    as? String
+                {
                     return name
                 }
                 service = IOIteratorNext(iterator)
@@ -386,10 +407,13 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
     }
 
     private func getVRAMTotalMBFromIORegistry() -> Int? {
-        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AMDRadeonAccelerator", "IOPCIDevice"]
+        let classes = [
+            "IOAccelerator", "IOAcceleratorBSDClient", "AMDRadeonAccelerator", "IOPCIDevice",
+        ]
         for cls in classes {
             var iterator: io_iterator_t = 0
-            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            let result = IOServiceGetMatchingServices(
+                kIOMainPortDefault, IOServiceMatching(cls), &iterator)
             guard result == KERN_SUCCESS else { continue }
             defer { IOObjectRelease(iterator) }
 
@@ -397,10 +421,16 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
             while service != 0 {
                 defer { IOObjectRelease(service) }
                 // 常见属性名：VRAM,totalMB 或 VRAM,Total
-                if let totalMB = IORegistryEntryCreateCFProperty(service, "VRAM,totalMB" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int {
+                if let totalMB = IORegistryEntryCreateCFProperty(
+                    service, "VRAM,totalMB" as CFString, kCFAllocatorDefault, 0)?
+                    .takeRetainedValue() as? Int
+                {
                     return totalMB
                 }
-                if let totalMB = IORegistryEntryCreateCFProperty(service, "VRAM,Total" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int {
+                if let totalMB = IORegistryEntryCreateCFProperty(
+                    service, "VRAM,Total" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+                    as? Int
+                {
                     return totalMB
                 }
                 service = IOIteratorNext(iterator)
@@ -416,14 +446,23 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe()
-        defer { if process.isRunning { process.terminate(); process.waitUntilExit() } }
+        defer {
+            if process.isRunning {
+                process.terminate()
+                process.waitUntilExit()
+            }
+        }
         do {
-            try process.run(); process.waitUntilExit()
+            try process.run()
+            process.waitUntilExit()
             guard process.terminationStatus == 0 else { return nil }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile(); pipe.fileHandleForReading.closeFile()
-            if let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [[String: Any]],
-               let displays = plist.first?["_items"] as? [[String: Any]],
-               let first = displays.first {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            pipe.fileHandleForReading.closeFile()
+            if let plist = try PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil) as? [[String: Any]],
+                let displays = plist.first?["_items"] as? [[String: Any]],
+                let first = displays.first
+            {
                 // sppci_vram 形如 "4 GB"，解析数字和单位
                 if let vramStr = first["sppci_vram"] as? String {
                     return parseMB(fromVramString: vramStr)
