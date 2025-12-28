@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:xiaoke-state}",
+            "name": "Debug SystemMonitor",
+            "target": "SystemMonitor",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SystemMonitor"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:xiaoke-state}",
+            "name": "Release SystemMonitor",
+            "target": "SystemMonitor",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SystemMonitor"
+        }
+    ]
+}

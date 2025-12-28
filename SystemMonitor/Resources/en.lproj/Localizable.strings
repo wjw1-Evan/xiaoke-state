@@ -1,0 +1,115 @@
+/* System Monitor - English Localization */
+
+/* Application */
+"app.name" = "System Monitor";
+"app.about" = "About System Monitor";
+"app.quit" = "Quit System Monitor";
+"app.preferences" = "Preferences...";
+
+/* Status Bar */
+"statusbar.tooltip" = "System Monitor - Click for details, Right-click for quick actions";
+"statusbar.updated" = "Updated: %@";
+
+/* Menu Sections */
+"menu.cpu" = "🖥️ CPU Information";
+"menu.memory" = "💾 Memory Information";
+"menu.gpu" = "🎮 GPU Information";
+"menu.temperature" = "🌡️ Temperature";
+"menu.network" = "🌐 Network";
+"menu.disk" = "💽 Disk Usage";
+"menu.performance" = "⚡ App Performance";
+
+/* CPU */
+"cpu.usage" = "Usage: %.1f%%";
+"cpu.cores" = "Cores: %d";
+"cpu.frequency" = "Frequency: %.2f GHz";
+
+/* Memory */
+"memory.usage" = "Usage: %.1f GB / %.1f GB (%.1f%%)";
+"memory.pressure" = "Pressure: %@";
+"memory.swap" = "Swap Used: %.1f GB";
+
+/* GPU */
+"gpu.name" = "%@";
+"gpu.usage" = "Usage: %.1f%%";
+"gpu.memory" = "Memory: %.1f GB / %.1f GB";
+
+/* Temperature */
+"temp.cpu" = "CPU: %.1f°C";
+"temp.gpu" = "GPU: %.1f°C";
+"temp.fan" = "Fan: %d RPM";
+
+/* Network */
+"network.speed" = "↑ %.1f MB/s  ↓ %.1f MB/s";
+"network.total" = "Total: ↑ %.1f GB  ↓ %.1f GB";
+
+/* Disk */
+"disk.info" = "%@: %.1f GB / %.1f GB (%.1f%%)";
+"disk.io" = "  I/O: R %.1f MB/s  W %.1f MB/s";
+
+/* Performance */
+"perf.cpu" = "CPU: %.2f%%";
+"perf.memory" = "Memory: %.1f MB";
+"perf.threads" = "Threads: %d";
+
+/* Alerts */
+"alert.permission.title" = "Permission Required";
+"alert.permission.message" = "System Monitor needs permission to access system information. Please grant the necessary permissions in System Preferences.";
+
+/* Preferences */
+"prefs.title" = "System Monitor Preferences";
+"prefs.updateInterval" = "Update Interval";
+"prefs.displayOptions" = "Display Options";
+"prefs.menuBarFormat" = "Menu Bar Format";
+"prefs.warningThresholds" = "Warning Thresholds";
+"prefs.appManagement" = "Application Management";
+
+"prefs.showCPU" = "Show CPU Information";
+"prefs.showGPU" = "Show GPU Information";
+"prefs.showMemory" = "Show Memory Information";
+"prefs.showDisk" = "Show Disk Information";
+"prefs.showTemperature" = "Show Temperature Information";
+"prefs.showFan" = "Show Fan Speed";
+"prefs.showNetwork" = "Show Network Information";
+
+"prefs.cpuWarning" = "CPU Usage Warning:";
+"prefs.memoryWarning" = "Memory Usage Warning:";
+"prefs.tempWarning" = "Temperature Warning:";
+
+"prefs.autoRestart" = "Enable auto-restart on crash (experimental)";
+"prefs.launchAtLogin" = "Launch at login";
+"prefs.viewLogs" = "View logs";
+"prefs.resetDefaults" = "Reset to Defaults";
+"prefs.close" = "Close";
+/* Preferences - Language */
+"prefs.language" = "Language";
+"prefs.language.auto" = "Auto (Follow System)";
+"prefs.language.english" = "English";
+"prefs.language.japanese" = "Japanese";
+"prefs.language.chinese.simplified" = "Chinese (Simplified)";
+
+"prefs.seconds" = "%d second%@";
+"prefs.second.singular" = "";
+"prefs.second.plural" = "s";
+
+/* Memory Pressure */
+"pressure.normal" = "Normal";
+"pressure.warning" = "Warning";
+"pressure.critical" = "Critical";
+
+/* Menu Bar Format */
+"format.percentage" = "Percentage";
+"format.icon" = "Icon";
+"format.both" = "Both";
+
+/* N/A */
+"na" = "N/A";
+
+/* Short labels for status bar compact text */
+"short.cpu" = "CPU";
+"short.mem" = "Mem";
+"short.gpu" = "GPU";
+"short.disk" = "Disk";
+"short.fan" = "Fan";
+"short.net" = "Net";
+

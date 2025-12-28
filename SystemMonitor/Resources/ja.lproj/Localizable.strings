@@ -1,0 +1,115 @@
+/* System Monitor - 日本語ローカライゼーション */
+
+/* Application */
+"app.name" = "システムモニター";
+"app.about" = "システムモニターについて";
+"app.quit" = "システムモニターを終了";
+"app.preferences" = "環境設定...";
+
+/* Status Bar */
+"statusbar.tooltip" = "システムモニター - クリックで詳細、右クリックでクイックアクション";
+"statusbar.updated" = "更新: %@";
+
+/* Menu Sections */
+"menu.cpu" = "🖥️ CPU情報";
+"menu.memory" = "💾 メモリ情報";
+"menu.gpu" = "🎮 GPU情報";
+"menu.temperature" = "🌡️ 温度";
+"menu.network" = "🌐 ネットワーク";
+"menu.disk" = "💽 ディスク使用量";
+"menu.performance" = "⚡ アプリパフォーマンス";
+
+/* CPU */
+"cpu.usage" = "使用率: %.1f%%";
+"cpu.cores" = "コア数: %d";
+"cpu.frequency" = "周波数: %.2f GHz";
+
+/* Memory */
+"memory.usage" = "使用: %.1f GB / %.1f GB (%.1f%%)";
+"memory.pressure" = "プレッシャー: %@";
+"memory.swap" = "スワップ使用: %.1f GB";
+
+/* GPU */
+"gpu.name" = "%@";
+"gpu.usage" = "使用率: %.1f%%";
+"gpu.memory" = "メモリ: %.1f GB / %.1f GB";
+
+/* Temperature */
+"temp.cpu" = "CPU: %.1f°C";
+"temp.gpu" = "GPU: %.1f°C";
+"temp.fan" = "ファン: %d RPM";
+
+/* Network */
+"network.speed" = "↑ %.1f MB/s  ↓ %.1f MB/s";
+"network.total" = "合計: ↑ %.1f GB  ↓ %.1f GB";
+
+/* Disk */
+"disk.info" = "%@: %.1f GB / %.1f GB (%.1f%%)";
+"disk.io" = "  I/O: 読 %.1f MB/s  書 %.1f MB/s";
+
+/* Performance */
+"perf.cpu" = "CPU: %.2f%%";
+"perf.memory" = "メモリ: %.1f MB";
+"perf.threads" = "スレッド: %d";
+
+/* Alerts */
+"alert.permission.title" = "権限が必要";
+"alert.permission.message" = "システムモニターはシステム情報にアクセスする権限が必要です。システム環境設定で必要な権限を付与してください。";
+
+/* Preferences */
+"prefs.title" = "システムモニター環境設定";
+"prefs.updateInterval" = "更新間隔";
+"prefs.displayOptions" = "表示オプション";
+"prefs.menuBarFormat" = "メニューバー形式";
+"prefs.warningThresholds" = "警告しきい値";
+"prefs.appManagement" = "アプリケーション管理";
+
+"prefs.showCPU" = "CPU情報を表示";
+"prefs.showGPU" = "GPU情報を表示";
+"prefs.showMemory" = "メモリ情報を表示";
+"prefs.showDisk" = "ディスク情報を表示";
+"prefs.showTemperature" = "温度情報を表示";
+"prefs.showFan" = "ファン回転数を表示";
+"prefs.showNetwork" = "ネットワーク情報を表示";
+
+"prefs.cpuWarning" = "CPU使用率警告:";
+"prefs.memoryWarning" = "メモリ使用率警告:";
+"prefs.tempWarning" = "温度警告:";
+
+"prefs.autoRestart" = "クラッシュ時の自動再起動を有効にする（実験的）";
+"prefs.launchAtLogin" = "ログイン時に起動";
+"prefs.viewLogs" = "ログを表示";
+"prefs.resetDefaults" = "デフォルトに戻す";
+"prefs.close" = "閉じる";
+/* Preferences - Language */
+"prefs.language" = "言語";
+"prefs.language.auto" = "自動（システムに従う）";
+"prefs.language.english" = "英語";
+"prefs.language.japanese" = "日本語";
+"prefs.language.chinese.simplified" = "中国語（簡体字）";
+
+"prefs.seconds" = "%d 秒";
+"prefs.second.singular" = "";
+"prefs.second.plural" = "";
+
+/* Memory Pressure */
+"pressure.normal" = "正常";
+"pressure.warning" = "警告";
+"pressure.critical" = "重大";
+
+/* Menu Bar Format */
+"format.percentage" = "パーセンテージ";
+"format.icon" = "アイコン";
+"format.both" = "両方";
+
+/* N/A */
+"na" = "利用不可";
+
+/* Short labels for status bar compact text */
+"short.cpu" = "CPU";
+"short.mem" = "メモリ";
+"short.gpu" = "GPU";
+"short.disk" = "ディスク";
+"short.fan" = "ファン";
+"short.net" = "ネット";
+

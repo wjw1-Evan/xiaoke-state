@@ -1,0 +1,114 @@
+/* System Monitor - 简体中文本地化（别名 zh 指向简体） */
+
+/* Application */
+"app.name" = "系统监控";
+"app.about" = "关于系统监控";
+"app.quit" = "退出系统监控";
+"app.preferences" = "偏好设置...";
+
+/* Status Bar */
+"statusbar.tooltip" = "系统监控 - 点击查看详情，右键点击快速操作";
+"statusbar.updated" = "更新于: %@";
+
+/* Menu Sections */
+"menu.cpu" = "🖥️ CPU 信息";
+"menu.memory" = "💾 内存信息";
+"menu.gpu" = "🎮 GPU 信息";
+"menu.temperature" = "🌡️ 温度";
+"menu.network" = "🌐 网络";
+"menu.disk" = "💽 磁盘使用";
+"menu.performance" = "⚡ 应用性能";
+
+/* CPU */
+"cpu.usage" = "使用率: %.1f%%";
+"cpu.cores" = "核心数: %d";
+"cpu.frequency" = "频率: %.2f GHz";
+
+/* Memory */
+"memory.usage" = "使用: %.1f GB / %.1f GB (%.1f%%)";
+"memory.pressure" = "压力: %@";
+"memory.swap" = "交换空间: %.1f GB";
+
+/* GPU */
+"gpu.name" = "%@";
+"gpu.usage" = "使用率: %.1f%%";
+"gpu.memory" = "显存: %.1f GB / %.1f GB";
+
+/* Temperature */
+"temp.cpu" = "CPU: %.1f°C";
+"temp.gpu" = "GPU: %.1f°C";
+"temp.fan" = "风扇: %d RPM";
+
+/* Network */
+"network.speed" = "↑ %.1f MB/s  ↓ %.1f MB/s";
+"network.total" = "总计: ↑ %.1f GB  ↓ %.1f GB";
+
+/* Disk */
+"disk.info" = "%@: %.1f GB / %.1f GB (%.1f%%)";
+"disk.io" = "  I/O: 读 %.1f MB/s  写 %.1f MB/s";
+
+/* Performance */
+"perf.cpu" = "CPU: %.2f%%";
+"perf.memory" = "内存: %.1f MB";
+"perf.threads" = "线程: %d";
+
+/* Alerts */
+"alert.permission.title" = "需要权限";
+"alert.permission.message" = "系统监控需要访问系统信息的权限。请在系统偏好设置中授予必要的权限。";
+
+/* Preferences */
+"prefs.title" = "系统监控偏好设置";
+"prefs.updateInterval" = "更新间隔";
+"prefs.displayOptions" = "显示选项";
+"prefs.menuBarFormat" = "菜单栏格式";
+"prefs.warningThresholds" = "警告阈值";
+"prefs.appManagement" = "应用管理";
+
+"prefs.showCPU" = "显示 CPU 信息";
+"prefs.showGPU" = "显示 GPU 信息";
+"prefs.showMemory" = "显示内存信息";
+"prefs.showDisk" = "显示磁盘信息";
+"prefs.showTemperature" = "显示温度信息";
+"prefs.showFan" = "显示风扇转速";
+"prefs.showNetwork" = "显示网络信息";
+
+"prefs.cpuWarning" = "CPU 使用率警告:";
+"prefs.memoryWarning" = "内存使用率警告:";
+"prefs.tempWarning" = "温度警告:";
+
+"prefs.autoRestart" = "启用崩溃自动重启（实验性）";
+"prefs.launchAtLogin" = "开机自启动";
+"prefs.viewLogs" = "查看日志";
+"prefs.resetDefaults" = "恢复默认设置";
+"prefs.close" = "关闭";
+/* Preferences - Language */
+"prefs.language" = "语言";
+"prefs.language.auto" = "自动（跟随系统）";
+"prefs.language.english" = "英语";
+"prefs.language.japanese" = "日语";
+"prefs.language.chinese.simplified" = "中文（简体）";
+
+"prefs.seconds" = "%d 秒";
+"prefs.second.singular" = "";
+"prefs.second.plural" = "";
+
+/* Memory Pressure */
+"pressure.normal" = "正常";
+"pressure.warning" = "警告";
+"pressure.critical" = "严重";
+
+/* Menu Bar Format */
+"format.percentage" = "百分比";
+"format.icon" = "图标";
+"format.both" = "两者";
+
+/* N/A */
+"na" = "不可用";
+
+/* Short labels for status bar compact text */
+"short.cpu" = "CPU";
+"short.mem" = "内存";
+"short.gpu" = "GPU";
+"short.disk" = "磁盘";
+"short.fan" = "风扇";
+"short.net" = "网络";
