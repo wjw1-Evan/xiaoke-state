@@ -86,6 +86,12 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
     // MARK: - Private Methods
 
     private func getGPUUsage() throws -> Double {
+        // 优先使用 IORegistry 的 PerformanceStatistics，不依赖 powermetrics
+        if let usage = getGPUUsageFromIORegistry() {
+            return usage
+        }
+
+        // 回退到 powermetrics
         if isAppleSilicon {
             return try getAppleSiliconGPUUsage()
         } else {
@@ -136,8 +142,12 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
                 var clusterCount = 0
 
                 for cluster in clusters {
-                    if let usage = cluster["idle_ratio"] as? Double {
-                        totalUsage += (1.0 - usage) * 100.0
+                    // idle_ratio: 0.0~1.0，取(1-idle_ratio)*100 作为使用率百分比
+                    if let idle = cluster["idle_ratio"] as? Double {
+                        totalUsage += max(0.0, min(100.0, (1.0 - idle) * 100.0))
+                        clusterCount += 1
+                    } else if let active = cluster["active_ratio"] as? Double {
+                        totalUsage += max(0.0, min(100.0, active * 100.0))
                         clusterCount += 1
                     }
                 }
@@ -189,10 +199,23 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
                 from: data, options: [], format: nil) as? [String: Any],
                 let samples = plist["samples"] as? [[String: Any]],
                 let firstSample = samples.first,
-                let gpuPower = firstSample["gpu_power"] as? [String: Any],
-                let usage = gpuPower["gpu_usage"] as? Double
+                let gpuPower = firstSample["gpu_power"] as? [String: Any]
             {
-                return usage
+                if let usage = gpuPower["gpu_usage"] as? Double {
+                    return max(0.0, min(100.0, usage))
+                }
+                // 某些机型可能提供 clusters 的 idle_ratio，与 Apple Silicon 类似
+                if let clusters = gpuPower["clusters"] as? [[String: Any]] {
+                    var total: Double = 0.0
+                    var cnt = 0
+                    for cluster in clusters {
+                        if let idle = cluster["idle_ratio"] as? Double {
+                            total += max(0.0, min(100.0, (1.0 - idle) * 100.0))
+                            cnt += 1
+                        }
+                    }
+                    if cnt > 0 { return total / Double(cnt) }
+                }
             }
 
             return 0.0
@@ -200,6 +223,43 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
             // Return 0 on error instead of throwing
             return 0.0
         }
+    }
+
+    /// 使用 IORegistry 读取 GPU 使用率（优先），读取 IOAccelerator* 的 PerformanceStatistics
+    private func getGPUUsageFromIORegistry() -> Double? {
+        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator"]
+
+        for cls in classes {
+            var iterator: io_iterator_t = 0
+            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            guard result == KERN_SUCCESS else { continue }
+
+            defer { IOObjectRelease(iterator) }
+
+            var service = IOIteratorNext(iterator)
+            while service != 0 {
+                defer { IOObjectRelease(service) }
+                if let dict = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? [String: Any] {
+                    // 常见键名："Device Utilization %"、"GPU Busy"（0~1）
+                    if let percent = dict["Device Utilization %"] as? Double {
+                        return max(0.0, min(100.0, percent))
+                    }
+                    if let busy = dict["GPU Busy"] as? Double {
+                        return max(0.0, min(100.0, busy * 100.0))
+                    }
+                    if let renderer = dict["Renderer Utilization %"] as? Double {
+                        return max(0.0, min(100.0, renderer))
+                    }
+                    if let tiler = dict["Tiler Utilization %"] as? Double {
+                        // 若仅有 Tiler，则也返回该值
+                        return max(0.0, min(100.0, tiler))
+                    }
+                }
+                service = IOIteratorNext(iterator)
+            }
+        }
+
+        return nil
     }
 
     private func getGPUMemory() throws -> (used: UInt64, total: UInt64) {
@@ -211,43 +271,48 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
     }
 
     private func getAppleSiliconGPUMemory() throws -> (used: UInt64, total: UInt64) {
-        // Apple Silicon GPUs share system memory
-        // We'll estimate based on system memory
+        // Apple Silicon GPU 与系统共享内存，没有公开 API 给出实时显存使用。
+        // 尝试从 IORegistry 读取 VRAM/显存信息，如缺失则回退为系统内存的一部分作为总量估计，已用估计为 0。
+        if let vramMB = getVRAMTotalMBFromIORegistry() {
+            let total = UInt64(vramMB) * 1024 * 1024
+            return (used: 0, total: total)
+        }
+
         var size = MemoryLayout<UInt64>.size
         var totalMemory: UInt64 = 0
         let result = sysctlbyname("hw.memsize", &totalMemory, &size, nil, 0)
+        guard result == 0 else { throw MonitorError.systemCallFailed("sysctlbyname hw.memsize") }
 
-        guard result == 0 else {
-            throw MonitorError.systemCallFailed("sysctlbyname hw.memsize")
-        }
-
-        // Estimate GPU memory as a portion of system memory
-        let estimatedGPUMemory = totalMemory / 4  // Rough estimate
-        let estimatedUsed = estimatedGPUMemory / 10  // Very rough usage estimate
-
-        return (used: estimatedUsed, total: estimatedGPUMemory)
+        // Conservative estimate: 1/8 of system memory
+        let estimatedTotal = totalMemory / 8
+        return (used: 0, total: estimatedTotal)
     }
 
     private func getIntelGPUMemory() throws -> (used: UInt64, total: UInt64) {
-        // For Intel integrated GPUs, they also typically share system memory
-        // This is a simplified implementation
+        // 先尝试通过 IORegistry/system_profiler 获取离散显卡 VRAM；若为集显则保守估计为系统内存的一部分。
+        if let vramMB = getVRAMTotalMBFromIORegistry() {
+            let total = UInt64(vramMB) * 1024 * 1024
+            return (used: 0, total: total)
+        }
+        if let vramMB = getVRAMTotalMBFromSystemProfiler() {
+            let total = UInt64(vramMB) * 1024 * 1024
+            return (used: 0, total: total)
+        }
+
         var size = MemoryLayout<UInt64>.size
         var totalMemory: UInt64 = 0
         let result = sysctlbyname("hw.memsize", &totalMemory, &size, nil, 0)
+        guard result == 0 else { throw MonitorError.systemCallFailed("sysctlbyname hw.memsize") }
 
-        guard result == 0 else {
-            throw MonitorError.systemCallFailed("sysctlbyname hw.memsize")
-        }
-
-        // Estimate GPU memory for Intel integrated graphics
-        let estimatedGPUMemory = totalMemory / 8  // Conservative estimate
-        let estimatedUsed = estimatedGPUMemory / 20  // Very rough usage estimate
-
-        return (used: estimatedUsed, total: estimatedGPUMemory)
+        let estimatedTotal = totalMemory / 8
+        return (used: 0, total: estimatedTotal)
     }
 
     private func getGPUName() throws -> String {
-        // Try to get GPU name using system_profiler
+        // 优先从 IORegistry 读取 GPU 型号
+        if let name = getGPUNameFromIORegistry() { return name }
+
+        // 回退到 system_profiler
         let process = Process()
         process.launchPath = "/usr/sbin/system_profiler"
         process.arguments = ["SPDisplaysDataType", "-xml"]
@@ -257,11 +322,7 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
         process.standardError = Pipe()
 
         defer {
-            // Ensure process is cleaned up
-            if process.isRunning {
-                process.terminate()
-                process.waitUntilExit()
-            }
+            if process.isRunning { process.terminate(); process.waitUntilExit() }
         }
 
         do {
@@ -269,7 +330,7 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
             process.waitUntilExit()
 
             guard process.terminationStatus == 0 else {
-                return isAppleSilicon ? "Apple GPU" : "Intel GPU"
+                return isAppleSilicon ? "Apple GPU" : "Intel/AMD GPU"
             }
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -277,16 +338,109 @@ class GPUMonitor: BaseMonitor, MonitorProtocol {
 
             if let plist = try PropertyListSerialization.propertyList(
                 from: data, options: [], format: nil) as? [[String: Any]],
-                let displays = plist.first?["_items"] as? [[String: Any]],
-                let firstDisplay = displays.first,
-                let chipsetModel = firstDisplay["sppci_model"] as? String
-            {
-                return chipsetModel
+               let displays = plist.first?["_items"] as? [[String: Any]],
+               let firstDisplay = displays.first {
+                if let model = firstDisplay["sppci_model"] as? String {
+                    return model
+                }
+                if let vendor = firstDisplay["_name"] as? String {
+                    return vendor
+                }
             }
 
-            return isAppleSilicon ? "Apple GPU" : "Intel GPU"
+            return isAppleSilicon ? "Apple GPU" : "Intel/AMD GPU"
         } catch {
-            return isAppleSilicon ? "Apple GPU" : "Intel GPU"
+            return isAppleSilicon ? "Apple GPU" : "Intel/AMD GPU"
         }
+    }
+
+    // MARK: - IORegistry helpers
+
+    private func getGPUNameFromIORegistry() -> String? {
+        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AGXAccelerator", "AMDRadeonAccelerator", "IOPCIDevice"]
+        for cls in classes {
+            var iterator: io_iterator_t = 0
+            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            guard result == KERN_SUCCESS else { continue }
+            defer { IOObjectRelease(iterator) }
+
+            var service = IOIteratorNext(iterator)
+            while service != 0 {
+                defer { IOObjectRelease(service) }
+                // 尝试读取 model 属性（可能为 CFData 或 CFString）
+                if let cfString = IORegistryEntryCreateCFProperty(service, "model" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() {
+                    if CFGetTypeID(cfString) == CFStringGetTypeID() {
+                        return cfString as? String
+                    } else if CFGetTypeID(cfString) == CFDataGetTypeID(), let data = cfString as? Data, let str = String(data: data, encoding: .utf8) {
+                        return str
+                    }
+                }
+                // 备用：IOName 或 Vendor/Device strings
+                if let name = IORegistryEntryCreateCFProperty(service, "IOName" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String {
+                    return name
+                }
+                service = IOIteratorNext(iterator)
+            }
+        }
+        return nil
+    }
+
+    private func getVRAMTotalMBFromIORegistry() -> Int? {
+        let classes = ["IOAccelerator", "IOAcceleratorBSDClient", "AMDRadeonAccelerator", "IOPCIDevice"]
+        for cls in classes {
+            var iterator: io_iterator_t = 0
+            let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &iterator)
+            guard result == KERN_SUCCESS else { continue }
+            defer { IOObjectRelease(iterator) }
+
+            var service = IOIteratorNext(iterator)
+            while service != 0 {
+                defer { IOObjectRelease(service) }
+                // 常见属性名：VRAM,totalMB 或 VRAM,Total
+                if let totalMB = IORegistryEntryCreateCFProperty(service, "VRAM,totalMB" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int {
+                    return totalMB
+                }
+                if let totalMB = IORegistryEntryCreateCFProperty(service, "VRAM,Total" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int {
+                    return totalMB
+                }
+                service = IOIteratorNext(iterator)
+            }
+        }
+        return nil
+    }
+
+    private func getVRAMTotalMBFromSystemProfiler() -> Int? {
+        let process = Process()
+        process.launchPath = "/usr/sbin/system_profiler"
+        process.arguments = ["SPDisplaysDataType", "-xml"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        defer { if process.isRunning { process.terminate(); process.waitUntilExit() } }
+        do {
+            try process.run(); process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile(); pipe.fileHandleForReading.closeFile()
+            if let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [[String: Any]],
+               let displays = plist.first?["_items"] as? [[String: Any]],
+               let first = displays.first {
+                // sppci_vram 形如 "4 GB"，解析数字和单位
+                if let vramStr = first["sppci_vram"] as? String {
+                    return parseMB(fromVramString: vramStr)
+                }
+            }
+        } catch { return nil }
+        return nil
+    }
+
+    private func parseMB(fromVramString s: String) -> Int? {
+        // 支持 "4096 MB" 或 "4 GB"
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let parts = trimmed.split(separator: " ")
+        guard parts.count >= 2, let value = Double(parts[0]) else { return nil }
+        let unit = parts[1]
+        if unit.hasPrefix("GB") { return Int(value * 1024.0) }
+        if unit.hasPrefix("MB") { return Int(value) }
+        return nil
     }
 }

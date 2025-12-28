@@ -111,9 +111,9 @@ class MenuBuilder {
             addMemorySection(to: menu, with: data.memory)
         }
 
-        // GPU Information (if available)
-        if displayOptions.showGPU, let gpu = data.gpu {
-            addGPUSection(to: menu, with: gpu)
+        // GPU Information (always show section if enabled)
+        if displayOptions.showGPU {
+            addGPUSection(to: menu, with: data.gpu)
         }
 
         // Temperature / fan Information
@@ -121,20 +121,18 @@ class MenuBuilder {
             addTemperatureSection(to: menu, with: data.temperature)
         }
 
-        // Network Information (if available)
-        if displayOptions.showNetwork, let network = data.network {
-            addNetworkSection(to: menu, with: network)
+        // Network Information (always show section if enabled)
+        if displayOptions.showNetwork {
+            addNetworkSection(to: menu, with: data.network)
         }
 
-        // Disk Information (if available)
-        if displayOptions.showDisk && !data.disk.isEmpty {
+        // Disk Information (always show section if enabled)
+        if displayOptions.showDisk {
             addDiskSection(to: menu, with: data.disk)
         }
 
-        // Performance Information (if available)
-        if let performance = data.performance {
-            addPerformanceSection(to: menu, with: performance)
-        }
+        // Performance Information (always show if enabled in display options)
+        addPerformanceSection(to: menu, with: data.performance)
     }
 
     private func addCPUSection(to menu: NSMenu, with cpu: CPUData) {
@@ -186,9 +184,16 @@ class MenuBuilder {
         menu.addItem(NSMenuItem.separator())
     }
 
-    private func addGPUSection(to menu: NSMenu, with gpu: GPUData) {
+    private func addGPUSection(to menu: NSMenu, with gpu: GPUData?) {
         let gpuItem = createSectionHeader(localized("menu.gpu"))
         menu.addItem(gpuItem)
+
+        guard let gpu = gpu else {
+            let naItem = createInfoItem(localized("na"))
+            menu.addItem(naItem)
+            menu.addItem(NSMenuItem.separator())
+            return
+        }
 
         let gpuNameText = String(format: localized("gpu.name"), gpu.name)
         let gpuNameItem = createInfoItem(gpuNameText)
@@ -253,9 +258,15 @@ class MenuBuilder {
         menu.addItem(NSMenuItem.separator())
     }
 
-    private func addNetworkSection(to menu: NSMenu, with network: NetworkData) {
+    private func addNetworkSection(to menu: NSMenu, with network: NetworkData?) {
         let networkItem = createSectionHeader(localized("menu.network"))
         menu.addItem(networkItem)
+        guard let network = network else {
+            let naItem = createInfoItem(localized("na"))
+            menu.addItem(naItem)
+            menu.addItem(NSMenuItem.separator())
+            return
+        }
 
         let uploadMBps = Double(network.uploadSpeed) / (1024 * 1024)
         let downloadMBps = Double(network.downloadSpeed) / (1024 * 1024)
@@ -277,9 +288,15 @@ class MenuBuilder {
         menu.addItem(NSMenuItem.separator())
     }
 
-    private func addDiskSection(to menu: NSMenu, with disks: [DiskData]) {
+    private func addDiskSection(to menu: NSMenu, with disks: [DiskData]?) {
         let diskItem = createSectionHeader(localized("menu.disk"))
         menu.addItem(diskItem)
+        guard let disks = disks, !disks.isEmpty else {
+            let naItem = createInfoItem(localized("na"))
+            menu.addItem(naItem)
+            menu.addItem(NSMenuItem.separator())
+            return
+        }
 
         for disk in disks {
             let usedGB = Double(disk.used) / (1024 * 1024 * 1024)
@@ -303,9 +320,15 @@ class MenuBuilder {
         menu.addItem(NSMenuItem.separator())
     }
 
-    private func addPerformanceSection(to menu: NSMenu, with performance: PerformanceData) {
+    private func addPerformanceSection(to menu: NSMenu, with performance: PerformanceData?) {
         let perfItem = createSectionHeader(localized("menu.performance"))
         menu.addItem(perfItem)
+        guard let performance = performance else {
+            let naItem = createInfoItem(localized("na"))
+            menu.addItem(naItem)
+            menu.addItem(NSMenuItem.separator())
+            return
+        }
 
         let cpuColor = getUsageColor(performance.cpuUsagePercent)
         let appCpuText = String(format: localized("perf.cpu"), performance.cpuUsagePercent)
@@ -351,17 +374,19 @@ class MenuBuilder {
             let attributed = NSMutableAttributedString(string: combined)
 
             let fullRange = NSRange(location: 0, length: (combined as NSString).length)
-            attributed.addAttributes([
-                .font: font,
-                .foregroundColor: NSColor.controlTextColor,
-            ], range: fullRange)
+            attributed.addAttributes(
+                [
+                    .font: font,
+                    .foregroundColor: NSColor.controlTextColor,
+                ], range: fullRange)
 
             let valueRange = (combined as NSString).range(of: value)
             if valueRange.location != NSNotFound {
-                attributed.addAttributes([
-                    .font: font,
-                    .foregroundColor: color,
-                ], range: valueRange)
+                attributed.addAttributes(
+                    [
+                        .font: font,
+                        .foregroundColor: color,
+                    ], range: valueRange)
             }
 
             item.attributedTitle = attributed

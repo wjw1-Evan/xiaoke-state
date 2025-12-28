@@ -138,10 +138,12 @@ class SystemMonitor: MonitorManagerProtocol {
 
     private func startUpdateTimer() {
         let currentInterval = adaptiveFrequencyManager.getCurrentUpdateInterval()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: currentInterval, repeats: true) {
-            [weak self] _ in
+        let timer = Timer(timeInterval: currentInterval, repeats: true) { [weak self] _ in
             self?.collectAndUpdateData()
         }
+        updateTimer = timer
+        // 使用 Common 模式，确保在菜单跟踪等 UI 模式下仍继续触发
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func stopUpdateTimer() {
@@ -587,10 +589,11 @@ extension SystemMonitor {
 
         // Restart timer with new interval
         stopUpdateTimer()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: newInterval, repeats: true) {
-            [weak self] _ in
+        let timer = Timer(timeInterval: newInterval, repeats: true) { [weak self] _ in
             self?.collectAndUpdateData()
         }
+        updateTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     /// Get frequency management statistics

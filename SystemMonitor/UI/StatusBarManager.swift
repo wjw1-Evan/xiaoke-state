@@ -1,11 +1,12 @@
 import Cocoa
 
-class StatusBarManager {
+class StatusBarManager: NSObject, NSMenuDelegate {
     // MARK: - Properties
     private var statusItem: NSStatusItem?
     private var menuBuilder: MenuBuilder
     private var warningThresholds: WarningThresholds
     private var displayOptions: DisplayOptions
+    private var isMenuOpen: Bool = false
 
     // MARK: - Initialization
     init(
@@ -49,6 +50,7 @@ class StatusBarManager {
 
         // Set up menu
         statusItem.menu = menuBuilder.buildMenu()
+        statusItem.menu?.delegate = self
     }
 
     private func createStatusBarIcon() -> NSImage {
@@ -132,8 +134,9 @@ class StatusBarManager {
                 self.updateStatusColor(for: data.cpu.usage)
             }
 
-            // Update menu with latest data
+            // 刷新全部数据：无论菜单是否打开，都重建完整菜单并保持委托
             statusItem.menu = self.menuBuilder.buildMenu(with: data)
+            statusItem.menu?.delegate = self
         }
     }
 
@@ -192,6 +195,16 @@ class StatusBarManager {
         statusItem.button?.performClick(nil)
     }
 
+    // MARK: - NSMenuDelegate
+
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
+    }
+
     // MARK: - Private Methods
 
     private func updateStatusColor(for cpuUsage: Double) {
@@ -246,6 +259,8 @@ class StatusBarManager {
             button.image = createTwoLinePlaceholderImage()
         }
     }
+
+    // 不再单独更新时间戳；统一按完整菜单重建刷新全部数据
 
     private func buildStatusBarText(from data: SystemData) -> String {
         var parts: [String] = []
@@ -489,6 +504,13 @@ class StatusBarManager {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .binary
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
     }
 
     private func localizedShort(_ key: String) -> String {
