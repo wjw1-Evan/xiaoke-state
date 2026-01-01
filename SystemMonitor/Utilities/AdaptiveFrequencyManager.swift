@@ -45,10 +45,13 @@ class AdaptiveFrequencyManager {
 
     /// Update system state and potentially adjust frequency
     func updateSystemState(cpuUsage: Double, memoryUsage: Double, isLowPower: Bool = false) {
+        // Track previous states so we can detect transitions
+        let wasHighLoad = isHighSystemLoad
+        let wasLowPower = isLowPowerMode
+
         isLowPowerMode = isLowPower
 
         // Determine if system is under high load
-        let wasHighLoad = isHighSystemLoad
         isHighSystemLoad = cpuUsage > highLoadCPUThreshold || memoryUsage > highLoadMemoryThreshold
 
         // Track consecutive samples to avoid frequent changes
@@ -60,11 +63,11 @@ class AdaptiveFrequencyManager {
             consecutiveHighLoadSamples = 0
         }
 
-        // Only change frequency after consistent samples
+        // Only change frequency after consistent samples or power mode changes
         let shouldRecalculate =
             (consecutiveHighLoadSamples >= loadSampleThreshold && !wasHighLoad)
             || (consecutiveLowLoadSamples >= loadSampleThreshold && wasHighLoad)
-            || (isLowPowerMode != isLowPowerMode)  // Power mode changed
+            || (wasLowPower != isLowPowerMode)  // Power mode changed
 
         if shouldRecalculate {
             recalculateUpdateInterval()

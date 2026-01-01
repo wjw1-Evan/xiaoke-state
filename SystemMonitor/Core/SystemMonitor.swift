@@ -42,6 +42,9 @@ class SystemMonitor: MonitorManagerProtocol {
         self.adaptiveFrequencyManager = AdaptiveFrequencyManager()
         self.intelligentCache = IntelligentCache()
 
+        // Ensure base interval starts from 1 second so first timer uses 1s
+        adaptiveFrequencyManager.setBaseUpdateInterval(updateInterval)
+
         setupAdaptiveFrequency()
     }
 
@@ -184,27 +187,6 @@ class SystemMonitor: MonitorManagerProtocol {
         }
     }
 
-    private func collectSystemData() -> SystemData {
-        let cpuData = cpuMonitor.collect()
-        let memoryData = memoryMonitor.collect()
-        let performanceData = performanceMonitor.collect()
-
-        // Collect data from extended monitors if available
-        let gpuData = gpuMonitor.isAvailable() ? gpuMonitor.collect() : nil
-        let temperatureData = temperatureMonitor.isAvailable() ? temperatureMonitor.collect() : nil
-        let networkData = networkMonitor.isAvailable() ? networkMonitor.collect() : nil
-        let diskData = diskMonitor.isAvailable() ? diskMonitor.collect() : []
-
-        return SystemData(
-            cpu: cpuData,
-            gpu: gpuData,
-            memory: memoryData,
-            disk: diskData,
-            temperature: temperatureData,
-            network: networkData,
-            performance: performanceData
-        )
-    }
 
     private func collectSystemDataAsync() throws -> SystemData {
         // Use concurrent queue for parallel data collection
@@ -220,43 +202,25 @@ class SystemMonitor: MonitorManagerProtocol {
         var networkData: NetworkData?
         var diskData: [DiskData] = []
 
-        var collectionErrors: [MonitorError] = []
-
         // Collect CPU data
         group.enter()
         concurrentQueue.async {
             defer { group.leave() }
-            do {
-                cpuData = self.cpuMonitor.collect()
-            } catch {
-                collectionErrors.append(
-                    error as? MonitorError ?? .systemCallFailed("CPU data collection failed"))
-            }
+            cpuData = self.cpuMonitor.collect()
         }
 
         // Collect Memory data
         group.enter()
         concurrentQueue.async {
             defer { group.leave() }
-            do {
-                memoryData = self.memoryMonitor.collect()
-            } catch {
-                collectionErrors.append(
-                    error as? MonitorError ?? .systemCallFailed("Memory data collection failed"))
-            }
+            memoryData = self.memoryMonitor.collect()
         }
 
         // Collect Performance data
         group.enter()
         concurrentQueue.async {
             defer { group.leave() }
-            do {
-                performanceData = self.performanceMonitor.collect()
-            } catch {
-                collectionErrors.append(
-                    error as? MonitorError
-                        ?? .systemCallFailed("Performance data collection failed"))
-            }
+            performanceData = self.performanceMonitor.collect()
         }
 
         // Collect GPU data if available
@@ -264,12 +228,7 @@ class SystemMonitor: MonitorManagerProtocol {
             group.enter()
             concurrentQueue.async {
                 defer { group.leave() }
-                do {
-                    gpuData = self.gpuMonitor.collect()
-                } catch {
-                    collectionErrors.append(
-                        error as? MonitorError ?? .systemCallFailed("GPU data collection failed"))
-                }
+                gpuData = self.gpuMonitor.collect()
             }
         }
 
@@ -278,13 +237,7 @@ class SystemMonitor: MonitorManagerProtocol {
             group.enter()
             concurrentQueue.async {
                 defer { group.leave() }
-                do {
-                    temperatureData = self.temperatureMonitor.collect()
-                } catch {
-                    collectionErrors.append(
-                        error as? MonitorError
-                            ?? .systemCallFailed("Temperature data collection failed"))
-                }
+                temperatureData = self.temperatureMonitor.collect()
             }
         }
 
@@ -293,13 +246,7 @@ class SystemMonitor: MonitorManagerProtocol {
             group.enter()
             concurrentQueue.async {
                 defer { group.leave() }
-                do {
-                    networkData = self.networkMonitor.collect()
-                } catch {
-                    collectionErrors.append(
-                        error as? MonitorError
-                            ?? .systemCallFailed("Network data collection failed"))
-                }
+                networkData = self.networkMonitor.collect()
             }
         }
 
@@ -308,12 +255,7 @@ class SystemMonitor: MonitorManagerProtocol {
             group.enter()
             concurrentQueue.async {
                 defer { group.leave() }
-                do {
-                    diskData = self.diskMonitor.collect()
-                } catch {
-                    collectionErrors.append(
-                        error as? MonitorError ?? .systemCallFailed("Disk data collection failed"))
-                }
+                diskData = self.diskMonitor.collect()
             }
         }
 
@@ -322,13 +264,6 @@ class SystemMonitor: MonitorManagerProtocol {
 
         guard result == .success else {
             throw MonitorError.systemCallFailed("Data collection timeout")
-        }
-
-        // Log any collection errors but continue with available data
-        if !collectionErrors.isEmpty {
-            for error in collectionErrors {
-                NSLog("Data collection error: \(error.localizedDescription)")
-            }
         }
 
         // Ensure we have at least CPU and Memory data (required)
@@ -364,35 +299,6 @@ class SystemMonitor: MonitorManagerProtocol {
         )
     }
 
-    private func collectGPUDataWithCaching() -> GPUData? {
-        // Try to get cached GPU name (doesn't change)
-        let cachedName = intelligentCache.getCachedData(key: "gpu_name", type: String.self)
-
-        let gpuData = gpuMonitor.collect()
-
-        // Cache the GPU name if we got new data and no cached name exists
-        if cachedName == nil {
-            intelligentCache.setCachedData(key: "gpu_name", data: gpuData.name)
-        }
-
-        return gpuData
-    }
-
-    private func collectDiskDataWithCaching() -> [DiskData] {
-        let diskData = diskMonitor.collect()
-
-        // Cache disk mount points and names (change rarely)
-        for disk in diskData {
-            let cacheKey = "disk_info_\(disk.mountPoint)"
-            if !intelligentCache.isCached(key: cacheKey) {
-                let diskInfo = (name: disk.name, mountPoint: disk.mountPoint)
-                intelligentCache.setCachedData(key: cacheKey, data: diskInfo)
-            }
-        }
-
-        return diskData
-    }
-
     private func createDefaultSystemData() -> SystemData {
         let defaultCPU = CPUData(usage: 0.0, coreCount: 1, frequency: 0.0)
         let defaultMemory = MemoryData(used: 0, total: 1, pressure: .normal)
@@ -410,21 +316,8 @@ class SystemMonitor: MonitorManagerProtocol {
 
     private func createFallbackDataIfPossible() -> SystemData? {
         // Try to collect at least basic CPU and memory data
-        var cpuData: CPUData?
-        var memoryData: MemoryData?
-
-        do {
-            cpuData = cpuMonitor.collect()
-        } catch {
-            logger.error("Failed to collect CPU data for fallback: \(error.localizedDescription)")
-        }
-
-        do {
-            memoryData = memoryMonitor.collect()
-        } catch {
-            logger.error(
-                "Failed to collect memory data for fallback: \(error.localizedDescription)")
-        }
+        let cpuData: CPUData? = cpuMonitor.collect()
+        let memoryData: MemoryData? = memoryMonitor.collect()
 
         // If we have at least one type of data, create fallback
         if cpuData != nil || memoryData != nil {

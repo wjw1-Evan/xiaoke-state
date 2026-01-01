@@ -35,20 +35,15 @@ class PreferencesManager {
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
         registerDefaults()
+        migrateDisplayOptionsIfNeeded()
     }
 
     // MARK: - Public Properties
 
+    /// 固定为 1 秒刷新间隔，不再暴露给偏好设置界面
     var updateInterval: TimeInterval {
-        get {
-            let interval = userDefaults.double(forKey: Keys.updateInterval)
-            return interval > 0 ? interval : 1.0
-        }
-        set {
-            let clampedValue = max(1.0, min(10.0, newValue))
-            userDefaults.set(clampedValue, forKey: Keys.updateInterval)
-            notifySettingsChanged()
-        }
+        get { 1.0 }
+        set { /* ignore external changes */ }
     }
 
     var displayOptions: DisplayOptions {
@@ -201,6 +196,28 @@ class PreferencesManager {
         userDefaults.register(defaults: defaults)
     }
 
+    /// 迁移早期版本中可能误配置的显示选项，避免所有可选监控项被永久隐藏。
+    ///
+    /// 场景：如果用户偏好中 CPU/内存可见，但 GPU/磁盘/温度/网络全部为 false，
+    /// 很可能是旧版本或错误配置导致的，我们在此自动恢复这些可选项为可见。
+    private func migrateDisplayOptionsIfNeeded() {
+        let showCPU = userDefaults.bool(forKey: Keys.showCPU)
+        let showMemory = userDefaults.bool(forKey: Keys.showMemory)
+        let showGPU = userDefaults.bool(forKey: Keys.showGPU)
+        let showDisk = userDefaults.bool(forKey: Keys.showDisk)
+        let showTemperature = userDefaults.bool(forKey: Keys.showTemperature)
+        let showNetwork = userDefaults.bool(forKey: Keys.showNetwork)
+
+        // 如果核心指标可见，但所有可选指标都被关掉，则认为是异常配置，自动恢复。
+        if (showCPU || showMemory) && !showGPU && !showDisk && !showTemperature && !showNetwork {
+            userDefaults.set(true, forKey: Keys.showGPU)
+            userDefaults.set(true, forKey: Keys.showDisk)
+            userDefaults.set(true, forKey: Keys.showTemperature)
+            userDefaults.set(true, forKey: Keys.showNetwork)
+            logger.debug("Migrated display options: re-enabled GPU/Disk/Temperature/Network visibility")
+        }
+    }
+
     private func notifySettingsChanged() {
         DispatchQueue.main.async {
             self.onSettingsChanged?()
@@ -252,10 +269,6 @@ class PreferencesViewController: NSViewController {
     private weak var preferencesManager: PreferencesManager?
 
     // UI Controls
-    private var updateIntervalSlider: NSSlider!
-    private var updateIntervalLabel: NSTextField!
-    private var updateIntervalTitleLabel: NSTextField!
-
     private var showCPUCheckbox: NSButton!
     private var showGPUCheckbox: NSButton!
     private var showMemoryCheckbox: NSButton!
@@ -339,31 +352,6 @@ class PreferencesViewController: NSViewController {
         languagePopup.target = self
         languagePopup.action = #selector(languageChanged)
         contentView.addSubview(languagePopup)
-        yPosition -= controlHeight + spacing * 2
-
-        // Update Interval Section
-        updateIntervalTitleLabel = NSTextField(
-            labelWithString: NSLocalizedString("prefs.updateInterval", comment: ""))
-        updateIntervalTitleLabel.font = NSFont.boldSystemFont(ofSize: 13)
-        updateIntervalTitleLabel.frame = NSRect(
-            x: margin, y: yPosition, width: 200, height: controlHeight)
-        contentView.addSubview(updateIntervalTitleLabel)
-        yPosition -= controlHeight + spacing
-
-        updateIntervalSlider = NSSlider(
-            frame: NSRect(x: margin, y: yPosition, width: 300, height: controlHeight))
-        updateIntervalSlider.minValue = 1.0
-        updateIntervalSlider.maxValue = 10.0
-        updateIntervalSlider.numberOfTickMarks = 10
-        updateIntervalSlider.allowsTickMarkValuesOnly = true
-        updateIntervalSlider.target = self
-        updateIntervalSlider.action = #selector(updateIntervalChanged)
-        contentView.addSubview(updateIntervalSlider)
-
-        updateIntervalLabel = NSTextField(labelWithString: "1 second")
-        updateIntervalLabel.frame = NSRect(
-            x: margin + 310, y: yPosition, width: 100, height: controlHeight)
-        contentView.addSubview(updateIntervalLabel)
         yPosition -= controlHeight + spacing * 2
 
         // Display Options Section
@@ -557,18 +545,6 @@ class PreferencesViewController: NSViewController {
     private func loadCurrentSettings() {
         guard let preferencesManager = preferencesManager else { return }
 
-        // Update interval
-        updateIntervalSlider.doubleValue = preferencesManager.updateInterval
-        let secondsFormat = NSLocalizedString("prefs.seconds", comment: "")
-        let suffix =
-            preferencesManager.updateInterval == 1.0
-            ? NSLocalizedString("prefs.second.singular", comment: "")
-            : NSLocalizedString("prefs.second.plural", comment: "")
-        updateIntervalLabel.stringValue = String(
-            format: secondsFormat,
-            Int(preferencesManager.updateInterval),
-            suffix)
-
         // Display options
         let displayOptions = preferencesManager.displayOptions
         showCPUCheckbox.state = displayOptions.showCPU ? .on : .off
@@ -608,17 +584,6 @@ class PreferencesViewController: NSViewController {
     }
 
     // MARK: - Actions
-    @objc private func updateIntervalChanged() {
-        let interval = updateIntervalSlider.doubleValue
-        preferencesManager?.updateInterval = interval
-        let secondsFormat = NSLocalizedString("prefs.seconds", comment: "")
-        let suffix =
-            interval == 1.0
-            ? NSLocalizedString("prefs.second.singular", comment: "")
-            : NSLocalizedString("prefs.second.plural", comment: "")
-        updateIntervalLabel.stringValue = String(format: secondsFormat, Int(interval), suffix)
-    }
-
     @objc private func displayOptionChanged() {
         guard let preferencesManager = preferencesManager else { return }
 
@@ -632,10 +597,6 @@ class PreferencesViewController: NSViewController {
         displayOptions.showNetwork = showNetworkCheckbox.state == .on
 
         preferencesManager.displayOptions = displayOptions
-
-        // Update auto-restart setting
-        preferencesManager.isAutoRestartEnabled = autoRestartCheckbox.state == .on
-        preferencesManager.isLaunchAtLoginEnabled = launchAtLoginCheckbox.state == .on
     }
 
     @objc private func menuBarFormatChanged() {
@@ -663,8 +624,6 @@ class PreferencesViewController: NSViewController {
 
     private func refreshLocalizedTexts() {
         // Section titles
-        updateIntervalTitleLabel.stringValue = NSLocalizedString(
-            "prefs.updateInterval", comment: "")
         displayOptionsTitleLabel.stringValue = NSLocalizedString(
             "prefs.displayOptions", comment: "")
         menuBarFormatTitleLabel.stringValue = NSLocalizedString("prefs.menuBarFormat", comment: "")

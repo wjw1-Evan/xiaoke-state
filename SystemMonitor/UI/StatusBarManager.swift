@@ -75,33 +75,28 @@ class StatusBarManager: NSObject, NSMenuDelegate {
 
         image.lockFocus()
 
-        // Draw a simple chart/bar icon
+        // Draw a compact bar chart icon that matches the two-line style
         let context = NSGraphicsContext.current?.cgContext
-        // Use system blue color for compatibility
         let fillColor = NSColor.systemBlue
         context?.setFillColor(fillColor.cgColor)
         context?.setStrokeColor(fillColor.cgColor)
-        context?.setLineWidth(1.5)
+        context?.setLineWidth(1.0)
 
-        // Draw bars representing a chart
-        let barWidth: CGFloat = 3
-        let spacing: CGFloat = 2
+        let barWidth: CGFloat = 2.5
+        let spacing: CGFloat = 1.5
         let startX: CGFloat = 2
-        let startY: CGFloat = 2
+        let baselineY: CGFloat = 3
 
-        // Bar 1 (short)
-        context?.fill(CGRect(x: startX, y: startY, width: barWidth, height: 4))
-
-        // Bar 2 (medium)
-        context?.fill(CGRect(x: startX + barWidth + spacing, y: startY, width: barWidth, height: 7))
-
-        // Bar 3 (tall)
+        // Bars: low, medium, high, medium
+        context?.fill(CGRect(x: startX, y: baselineY, width: barWidth, height: 4))
         context?.fill(
-            CGRect(x: startX + (barWidth + spacing) * 2, y: startY, width: barWidth, height: 10))
-
-        // Bar 4 (medium)
+            CGRect(x: startX + (barWidth + spacing), y: baselineY, width: barWidth, height: 7))
         context?.fill(
-            CGRect(x: startX + (barWidth + spacing) * 3, y: startY, width: barWidth, height: 6))
+            CGRect(x: startX + (barWidth + spacing) * 2, y: baselineY, width: barWidth,
+                   height: 10))
+        context?.fill(
+            CGRect(x: startX + (barWidth + spacing) * 3, y: baselineY, width: barWidth,
+                   height: 6))
 
         image.unlockFocus()
         image.isTemplate = true  // Allow system to tint the icon
@@ -120,7 +115,8 @@ class StatusBarManager: NSObject, NSMenuDelegate {
                 if self.displayOptions.menuBarFormat == .twoLine {
                     let parts = self.buildTwoLineStatusParts(from: data)
                     button.image = self.createTwoLineStatusImage(
-                        parts: parts.parts, color: parts.color)
+                        parts: parts.parts, color: parts.color,
+                        appearance: button.effectiveAppearance)
                     button.title = ""
                     button.imagePosition = .imageOnly
                 } else {
@@ -134,9 +130,21 @@ class StatusBarManager: NSObject, NSMenuDelegate {
                 self.updateStatusColor(for: data.cpu.usage)
             }
 
-            // 刷新全部数据：无论菜单是否打开，都重建完整菜单并保持委托
-            statusItem.menu = self.menuBuilder.buildMenu(with: data)
-            statusItem.menu?.delegate = self
+            // 刷新菜单内容：保持同一个 NSMenu 实例，避免在打开时被替换导致数据停滞
+            let newMenu = self.menuBuilder.buildMenu(with: data)
+            if let existingMenu = statusItem.menu {
+                existingMenu.removeAllItems()
+                // Move items from the newly built menu into the existing one so that
+                // we never insert an item that already belongs to another menu.
+                while let item = newMenu.items.first {
+                    newMenu.removeItem(at: 0)
+                    existingMenu.addItem(item)
+                }
+                existingMenu.delegate = self
+            } else {
+                statusItem.menu = newMenu
+                statusItem.menu?.delegate = self
+            }
         }
     }
 
@@ -151,7 +159,7 @@ class StatusBarManager: NSObject, NSMenuDelegate {
             applyMenuBarFormat(to: button)
             if displayOptions.menuBarFormat == .twoLine {
                 // Ensure there is at least a placeholder image when switching modes before data arrives
-                button.image = createTwoLinePlaceholderImage()
+                button.image = createTwoLinePlaceholderImage(appearance: button.effectiveAppearance)
                 button.title = ""
                 button.imagePosition = .imageOnly
             }
@@ -233,7 +241,7 @@ class StatusBarManager: NSObject, NSMenuDelegate {
             button.attributedTitle = NSAttributedString(
                 string: button.title,
                 attributes: [
-                    .foregroundColor: NSColor.controlTextColor,
+                    .foregroundColor: NSColor.labelColor,
                     .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular),
                 ]
             )
@@ -264,6 +272,8 @@ class StatusBarManager: NSObject, NSMenuDelegate {
 
     private func buildStatusBarText(from data: SystemData) -> String {
         var parts: [String] = []
+        let naText = localizedShort("na")  // "N/A" placeholder (localized)
+
         if displayOptions.showCPU {
             parts.append(String(format: "\(localizedShort("short.cpu")) %.0f%%", data.cpu.usage))
         }
@@ -272,13 +282,19 @@ class StatusBarManager: NSObject, NSMenuDelegate {
                 String(format: "\(localizedShort("short.mem")) %.0f%%", data.memory.usagePercentage)
             )
         }
-        if displayOptions.showGPU, let gpu = data.gpu {
-            parts.append(String(format: "\(localizedShort("short.gpu")) %.0f%%", gpu.usage))
+        if displayOptions.showGPU {
+            if let gpu = data.gpu {
+                parts.append(String(format: "\(localizedShort("short.gpu")) %.0f%%", gpu.usage))
+            } else {
+                parts.append("\(localizedShort("short.gpu")) \(naText)")
+            }
         }
         if displayOptions.showTemperature {
+            let tempLabel = localizedShort("short.cpu")
             if let t = data.temperature?.cpuTemperature {
-                let tempLabel = localizedShort("short.cpu")
                 parts.append(String(format: "\(tempLabel) %.0f℃", t))
+            } else {
+                parts.append("\(tempLabel) --")
             }
         }
         if displayOptions.showFan {
@@ -289,16 +305,24 @@ class StatusBarManager: NSObject, NSMenuDelegate {
                 parts.append("\(fanLabel) --")
             }
         }
-        if displayOptions.showNetwork, let net = data.network {
-            let up = formatBytes(net.uploadSpeed)
-            let down = formatBytes(net.downloadSpeed)
-            parts.append("↑" + up + " ↓" + down)
+        if displayOptions.showNetwork {
+            if let net = data.network {
+                let up = formatBytes(net.uploadSpeed)
+                let down = formatBytes(net.downloadSpeed)
+                parts.append("↑" + up + " ↓" + down)
+            } else {
+                parts.append("NET \(naText)")
+            }
         }
-        if displayOptions.showDisk, !data.disk.isEmpty {
-            let totalUsed = data.disk.reduce(0) { $0 + $1.used }
-            let totalSpace = data.disk.reduce(0) { $0 + $1.total }
-            let percentage = totalSpace > 0 ? Double(totalUsed) / Double(totalSpace) * 100.0 : 0.0
-            parts.append(String(format: "\(localizedShort("short.disk")) %.0f%%", percentage))
+        if displayOptions.showDisk {
+            if !data.disk.isEmpty {
+                let totalUsed = data.disk.reduce(0) { $0 + $1.used }
+                let totalSpace = data.disk.reduce(0) { $0 + $1.total }
+                let percentage = totalSpace > 0 ? Double(totalUsed) / Double(totalSpace) * 100.0 : 0.0
+                parts.append(String(format: "\(localizedShort("short.disk")) %.0f%%", percentage))
+            } else {
+                parts.append("\(localizedShort("short.disk")) \(naText)")
+            }
         }
 
         if parts.isEmpty {
@@ -345,18 +369,26 @@ class StatusBarManager: NSObject, NSMenuDelegate {
             parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
         }
 
-        if displayOptions.showGPU, let gpu = data.gpu {
+        if displayOptions.showGPU {
             let label = localizedShort("short.gpu")
-            let value = String(format: "%.0f%%", gpu.usage)
-            let color = getUsageColor(gpu.usage)
-            parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            if let gpu = data.gpu {
+                let value = String(format: "%.0f%%", gpu.usage)
+                let color = getUsageColor(gpu.usage)
+                parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            } else {
+                parts.append(StatusPart(label: label, value: localizedShort("na"), severity: 0))
+            }
         }
 
-        if displayOptions.showTemperature, let t = data.temperature?.cpuTemperature {
+        if displayOptions.showTemperature {
             let label = localizedShort("short.cpu")
-            let value = String(format: "%.0f℃", t)
-            let color = getTemperatureColor(t)
-            parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            if let t = data.temperature?.cpuTemperature {
+                let value = String(format: "%.0f℃", t)
+                let color = getTemperatureColor(t)
+                parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            } else {
+                parts.append(StatusPart(label: label, value: "--", severity: 0))
+            }
         }
 
         if displayOptions.showFan {
@@ -369,26 +401,34 @@ class StatusBarManager: NSObject, NSMenuDelegate {
             }
         }
 
-        if displayOptions.showNetwork, let net = data.network {
+        if displayOptions.showNetwork {
             let label = localizedShort("short.net")
-            let value = "↑" + formatBytes(net.uploadSpeed) + " ↓" + formatBytes(net.downloadSpeed)
-            parts.append(StatusPart(label: label, value: value, severity: 0))
+            if let net = data.network {
+                let value = "↑" + formatBytes(net.uploadSpeed) + " ↓" + formatBytes(net.downloadSpeed)
+                parts.append(StatusPart(label: label, value: value, severity: 0))
+            } else {
+                parts.append(StatusPart(label: label, value: localizedShort("na"), severity: 0))
+            }
         }
 
-        if displayOptions.showDisk, !data.disk.isEmpty {
+        if displayOptions.showDisk {
             let label = localizedShort("short.disk")
-            let totalUsed = data.disk.reduce(0) { $0 + $1.used }
-            let totalSpace = data.disk.reduce(0) { $0 + $1.total }
-            let percentage = totalSpace > 0 ? Double(totalUsed) / Double(totalSpace) * 100.0 : 0.0
-            let value = String(format: "%.0f%%", percentage)
-            let color = getUsageColor(percentage)
-            parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            if !data.disk.isEmpty {
+                let totalUsed = data.disk.reduce(0) { $0 + $1.used }
+                let totalSpace = data.disk.reduce(0) { $0 + $1.total }
+                let percentage = totalSpace > 0 ? Double(totalUsed) / Double(totalSpace) * 100.0 : 0.0
+                let value = String(format: "%.0f%%", percentage)
+                let color = getUsageColor(percentage)
+                parts.append(StatusPart(label: label, value: value, severity: severity(for: color)))
+            } else {
+                parts.append(StatusPart(label: label, value: localizedShort("na"), severity: 0))
+            }
         }
 
         if parts.isEmpty {
             return (
                 [StatusPart(label: localizedShort("short.cpu"), value: "--", severity: 0)],
-                NSColor.controlTextColor
+                NSColor.labelColor
             )
         }
 
@@ -399,76 +439,91 @@ class StatusBarManager: NSObject, NSMenuDelegate {
         case 3: color = NSColor.systemRed
         case 2: color = NSColor.systemOrange
         case 1: color = NSColor.systemYellow
-        default: color = NSColor.controlTextColor
+        default: color = NSColor.labelColor
         }
 
         return (parts, color)
     }
 
-    private func createTwoLinePlaceholderImage() -> NSImage {
+    private func createTwoLinePlaceholderImage(appearance: NSAppearance? = nil) -> NSImage {
         let placeholderPart = StatusPart(
             label: localizedShort("short.cpu"), value: "--", severity: 0)
-        return createTwoLineStatusImage(parts: [placeholderPart], color: NSColor.controlTextColor)
+        return createTwoLineStatusImage(
+            parts: [placeholderPart], color: NSColor.labelColor, appearance: appearance)
     }
 
-    private func createTwoLineStatusImage(parts: [StatusPart], color: NSColor) -> NSImage {
+    private func createTwoLineStatusImage(
+        parts: [StatusPart], color: NSColor, appearance: NSAppearance? = nil
+    ) -> NSImage {
         // Compute status bar height
         let height = NSStatusBar.system.thickness
         // Fonts: compact top label, clearer bottom value
-        let topFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        let bottomFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        let topFont = NSFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
+        let bottomFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
 
-        let topAttrs: [NSAttributedString.Key: Any] = [
-            .font: topFont,
-            .foregroundColor: NSColor.controlTextColor,
-        ]
-        let bottomAttrs: [NSAttributedString.Key: Any] = [
-            .font: bottomFont,
-            .foregroundColor: color,
-        ]
+        // 使用当前外观进行绘制，动态色将在绘制时解析
+        let drawingAppearance = appearance ?? NSApp.effectiveAppearance
 
-        let paddingX: CGFloat = 4
-        let columnSpacing: CGFloat = 6
+        let paddingX: CGFloat = 3
+        let columnSpacing: CGFloat = 4
 
         // Measure per-column widths (align labels and values to same start x per column)
         var columnWidths: [CGFloat] = []
-        for part in parts {
-            let labelWidth = (part.label as NSString).size(withAttributes: topAttrs).width
-            let valueWidth = (part.value as NSString).size(withAttributes: bottomAttrs).width
-            columnWidths.append(max(labelWidth, valueWidth))
-        }
+        var totalWidth: CGFloat = paddingX * 2
 
-        let totalWidth =
-            columnWidths.reduce(0, +)
-            + columnSpacing * CGFloat(max(0, columnWidths.count - 1))
-            + paddingX * 2
+        let image = NSImage(size: NSSize(width: 1, height: 1))  // 占位，稍后根据宽度重建
 
-        let imageSize = NSSize(width: ceil(totalWidth), height: ceil(height))
-        let image = NSImage(size: imageSize)
+        drawingAppearance.performAsCurrentDrawingAppearance {
+            let topAttrs: [NSAttributedString.Key: Any] = [
+                .font: topFont,
+                .foregroundColor: NSColor.labelColor,
+            ]
+            let bottomAttrs: [NSAttributedString.Key: Any] = [
+                .font: bottomFont,
+                .foregroundColor: color,
+            ]
 
-        image.lockFocus()
-        defer { image.unlockFocus() }
+            // 重新计算列宽（需在颜色解析后保持一致的字体属性）
+            columnWidths.removeAll(keepingCapacity: true)
+            for part in parts {
+                let labelWidth = (part.label as NSString).size(withAttributes: topAttrs).width
+                let valueWidth = (part.value as NSString).size(withAttributes: bottomAttrs).width
+                columnWidths.append(max(labelWidth, valueWidth))
+            }
 
-        // Baseline positions: split the available height into two lines
-        let ctx = NSGraphicsContext.current?.cgContext
-        ctx?.saveGState()
-        defer { ctx?.restoreGState() }
+            totalWidth =
+                columnWidths.reduce(0, +)
+                + columnSpacing * CGFloat(max(0, columnWidths.count - 1))
+                + paddingX * 2
 
-        let topY = height * 0.58  // slightly above center
-        let bottomY = height * 0.18  // lower baseline
+            image.size = NSSize(width: ceil(totalWidth), height: ceil(height))
 
-        var currentX = paddingX
-        for (index, part) in parts.enumerated() {
-            let labelSize = (part.label as NSString).size(withAttributes: topAttrs)
-            let valueSize = (part.value as NSString).size(withAttributes: bottomAttrs)
+            image.lockFocus()
+            defer { image.unlockFocus() }
 
-            (part.label as NSString).draw(
-                at: NSPoint(x: currentX, y: topY - labelSize.height / 2), withAttributes: topAttrs)
-            (part.value as NSString).draw(
-                at: NSPoint(x: currentX, y: bottomY - valueSize.height / 2),
-                withAttributes: bottomAttrs)
+            // Baseline positions: split the available height into two lines
+            let ctx = NSGraphicsContext.current?.cgContext
+            ctx?.saveGState()
+            defer { ctx?.restoreGState() }
 
-            currentX += columnWidths[index] + columnSpacing
+            // 更紧凑的上下行布局
+            let topY = height * 0.78
+            let bottomY = height * 0.30
+
+            var currentX = paddingX
+            for (index, part) in parts.enumerated() {
+                let labelSize = (part.label as NSString).size(withAttributes: topAttrs)
+                let valueSize = (part.value as NSString).size(withAttributes: bottomAttrs)
+
+                (part.label as NSString).draw(
+                    at: NSPoint(x: currentX, y: topY - labelSize.height / 2),
+                    withAttributes: topAttrs)
+                (part.value as NSString).draw(
+                    at: NSPoint(x: currentX, y: bottomY - valueSize.height / 2),
+                    withAttributes: bottomAttrs)
+
+                currentX += columnWidths[index] + columnSpacing
+            }
         }
 
         // Template image allows system tint if needed; but we use explicit colors for value
@@ -484,7 +539,7 @@ class StatusBarManager: NSObject, NSMenuDelegate {
         } else if usage >= 50.0 {
             return NSColor.systemYellow
         } else {
-            return NSColor.controlTextColor
+            return NSColor.labelColor
         }
     }
 
@@ -496,14 +551,18 @@ class StatusBarManager: NSObject, NSMenuDelegate {
         } else if temperature >= 60.0 {
             return NSColor.systemYellow
         } else {
-            return NSColor.controlTextColor
+            return NSColor.labelColor
         }
     }
 
-    private func formatBytes(_ bytes: UInt64) -> String {
+    private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .binary
-        return formatter.string(fromByteCount: Int64(bytes))
+        return formatter
+    }()
+
+    private func formatBytes(_ bytes: UInt64) -> String {
+        return StatusBarManager.byteFormatter.string(fromByteCount: Int64(bytes))
     }
 
     private func formatTimestamp(_ date: Date) -> String {

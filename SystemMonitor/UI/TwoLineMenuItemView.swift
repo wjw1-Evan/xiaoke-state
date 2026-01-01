@@ -6,7 +6,7 @@ class TwoLineMenuItemView: NSView {
     private let valueLabel: NSTextField
     private let stackView: NSStackView
 
-    init(title: String, value: String, valueColor: NSColor = NSColor.controlTextColor) {
+    init(title: String, value: String, valueColor: NSColor = NSColor.labelColor) {
         // 预设一个合适的初始大小，实际高度由内容决定
         self.titleLabel = NSTextField(labelWithString: title)
         self.valueLabel = NSTextField(labelWithString: value)
@@ -24,7 +24,7 @@ class TwoLineMenuItemView: NSView {
     private func setupLabels(valueColor: NSColor) {
         // 标题样式
         titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        titleLabel.textColor = NSColor.controlTextColor
+        titleLabel.textColor = NSColor.labelColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.alignment = .left
         titleLabel.translatesAutoresizingMaskIntoConstraints = false

@@ -31,20 +31,11 @@ class TemperatureMonitor: BaseMonitor, MonitorProtocol {
         }
     }
 
+    /// Temperature and fan information is considered logically available on all supported macOS
+    /// systems. The monitor will internally degrade gracefully (returning nil / default values)
+    /// when powermetrics or pmset are not usable.
     func isAvailable() -> Bool {
-        let process = Process()
-        process.launchPath = "/usr/bin/which"
-        process.arguments = ["powermetrics"]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        return true
     }
 
     func startMonitoring() {

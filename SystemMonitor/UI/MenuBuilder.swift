@@ -76,11 +76,10 @@ class MenuBuilder {
         // Add header with timestamp
         let appName = appDisplayName(localized("app.name"))
         let headerItem = NSMenuItem(title: appName, action: nil, keyEquivalent: "")
-        headerItem.isEnabled = false
         let headerFont = NSFont.boldSystemFont(ofSize: 12)
         headerItem.attributedTitle = NSAttributedString(
             string: appName,
-            attributes: [.font: headerFont, .foregroundColor: NSColor.controlTextColor]
+            attributes: [.font: headerFont]
         )
         menu.addItem(headerItem)
 
@@ -91,11 +90,10 @@ class MenuBuilder {
             action: nil,
             keyEquivalent: ""
         )
-        timestampItem.isEnabled = false
         let timestampFont = NSFont.systemFont(ofSize: 10)
         timestampItem.attributedTitle = NSAttributedString(
             string: "  \(updatedText)",
-            attributes: [.font: timestampFont, .foregroundColor: NSColor.secondaryLabelColor]
+            attributes: [.font: timestampFont]
         )
         menu.addItem(timestampItem)
 
@@ -350,21 +348,16 @@ class MenuBuilder {
 
     private func createSectionHeader(_ title: String) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
         let font = NSFont.boldSystemFont(ofSize: 11)
-        item.attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [.font: font, .foregroundColor: NSColor.controlTextColor]
-        )
+        item.attributedTitle = NSAttributedString(string: title, attributes: [.font: font])
         return item
     }
 
-    private func createInfoItem(_ title: String, color: NSColor = NSColor.controlTextColor)
+    private func createInfoItem(_ title: String, color: NSColor? = nil)
         -> NSMenuItem
     {
         // 单行显示，若能拆分标题/数据则为数据部分着色
         let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        item.isEnabled = false
 
         let (label, value) = splitLabelAndValue(from: title)
         let font = NSFont.systemFont(ofSize: 10, weight: .regular)
@@ -376,12 +369,11 @@ class MenuBuilder {
             let fullRange = NSRange(location: 0, length: (combined as NSString).length)
             attributed.addAttributes(
                 [
-                    .font: font,
-                    .foregroundColor: NSColor.controlTextColor,
+                    .font: font
                 ], range: fullRange)
 
             let valueRange = (combined as NSString).range(of: value)
-            if valueRange.location != NSNotFound {
+            if valueRange.location != NSNotFound, let color = color {
                 attributed.addAttributes(
                     [
                         .font: font,
@@ -392,10 +384,17 @@ class MenuBuilder {
             item.attributedTitle = attributed
         } else {
             let combined = "  \(title)"
-            item.attributedTitle = NSAttributedString(
-                string: combined,
-                attributes: [.font: font, .foregroundColor: color]
-            )
+            if let color = color {
+                item.attributedTitle = NSAttributedString(
+                    string: combined,
+                    attributes: [.font: font, .foregroundColor: color]
+                )
+            } else {
+                item.attributedTitle = NSAttributedString(
+                    string: combined,
+                    attributes: [.font: font]
+                )
+            }
         }
 
         return item

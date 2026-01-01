@@ -9,7 +9,6 @@ class PerformanceMonitor: MonitorProtocol {
     // MARK: - Properties
     private let logger = Logger(subsystem: "com.systemmonitor", category: "PerformanceMonitor")
     private var isMonitoring = false
-    private var performanceTimer: Timer?
 
     // Performance tracking
     private var lastCPUTime: Double = 0
@@ -53,15 +52,10 @@ class PerformanceMonitor: MonitorProtocol {
         guard isMonitoring else { return }
 
         isMonitoring = false
-        performanceTimer?.invalidate()
-        performanceTimer = nil
-
         logger.info("Performance monitoring stopped")
     }
 
     func handleSystemSleep() {
-        performanceTimer?.invalidate()
-        performanceTimer = nil
         logger.debug("Performance monitoring paused for system sleep")
     }
 
